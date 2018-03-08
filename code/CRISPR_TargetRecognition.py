@@ -1,5 +1,50 @@
 import numpy as np
 
+
+
+def single_mismatches(Delta, guide_length= 20,model='minimal_model',normed=True):
+    pclv = []
+    for x in range(guide_length):
+        seq = np.ones(guide_length)
+        seq[x] = 0.
+        pclv.append( Pclv([seq],Delta,model) )
+
+    target_site = np.ones(guide_length)
+    return np.array(pclv) / Pclv([target_site],Delta, model)
+
+
+
+def compare_to_on_target(sequences,Delta,model='minimal_model'):
+    '''
+
+    Solution is divided by on-target value.
+
+    Calculates the probability to cleave according to kinetic model.
+    See 'Hybridisation Kinetics Explains Targeting Rules' for more info.
+
+    Can be used together with SimulatedAnnealing.py
+
+    For now it will call the 'minimal model'
+
+
+    :param sequences: encoded guide-target pairs. For minimal model this is "guide==target"
+    :param Delta: list or array of Kinetic Biases
+    :param model: name of the parameterization used for the kinetic biases.
+    :return: Pclv for every member in the list of sequences relative to Pclv(guide|guide)
+    '''
+
+    # first calculate Pclv for the on-target site
+    target_site = np.ones(len(sequences[0]))
+    on_target = Pclv([target_site],Delta,model)
+
+    # now loop through all member sequences and calculate Pclv, and divide by on-target value
+    pclv = Pclv(sequences=sequences,Delta=Delta,model=model)/on_target
+
+    return pclv
+
+
+
+
 def Pclv(sequences, Delta,model='minimal_model'):
     '''
     Calculates the probability to cleave according to kinetic model.
@@ -17,7 +62,6 @@ def Pclv(sequences, Delta,model='minimal_model'):
 
     pclv = []
     for seq in sequences:
-
         # get entire transition landscape:
         DeltaT = TransitionLandscape(model,Delta, seq)
 
