@@ -62,9 +62,8 @@ def CFD(guide, target):
     :param cfd_table:
     :return:
     '''
-
-    DNA = {0: 'A', 1: 'T', 2: 'C', 3: 'G'}
-    RNA = {0: 'A', 1: 'U', 2: 'C', 3: 'G'}
+    DNA = {0: 'A', 1: 'C', 2: 'G', 3: 'T'}
+    RNA = {0: 'A', 1: 'C', 2: 'G', 3: 'U'}
     mm_pos = np.where(guide != target)[0]
     # table shows the target strand (complementary), we search for homology
     target_strand = 3 - target
