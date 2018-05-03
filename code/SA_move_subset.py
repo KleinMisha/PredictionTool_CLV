@@ -333,7 +333,10 @@ def move_random_breakpoint(SA, breakpoints, mode='match'):
         next_breakpoint = breakpoints[index + 1]
     L = np.ceil(previous_breakpoint)
     U = np.floor(next_breakpoint)
-    
+    # if exactly at integer positions make exception:
+    if previous_breakpoint%1==0:
+        L +=1
+
     # 3) Move breakpoint and repeat until legal config is found
     trial_point = update_breakpoint(SA, breakpoints[index])
     while (trial_point < L) or (trial_point > U):
