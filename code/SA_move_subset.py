@@ -69,7 +69,7 @@ def sim_anneal_fit(xdata, ydata, yerr, Xstart, lwrbnd, upbnd, model,
                    nmbr_breakpoints_I=nmbr_breakpoints_I)
 
     # Adjust initial temperature
-    # InitialLoop(SA, X, xdata, ydata, yerr, lwrbnd, upbnd)
+    InitialLoop(SA, X, xdata, ydata, yerr, lwrbnd, upbnd)
     print('Initial temp:  ', SA.T)
     # store initial Temperature
     SA.initial_temperature = SA.T
