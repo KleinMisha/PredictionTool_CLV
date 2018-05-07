@@ -9,7 +9,6 @@
 #############################################################
 import numpy as np
 import multiprocessing as mp
-
 '''
 Main function
 '''
@@ -70,7 +69,7 @@ def sim_anneal_fit(xdata, ydata, yerr, Xstart, lwrbnd, upbnd, model,
                    nmbr_breakpoints_I=nmbr_breakpoints_I)
 
     # Adjust initial temperature
-    InitialLoop(SA, X, xdata, ydata, yerr, lwrbnd, upbnd)
+    # InitialLoop(SA, X, xdata, ydata, yerr, lwrbnd, upbnd)
     print('Initial temp:  ', SA.T)
     # store initial Temperature
     SA.initial_temperature = SA.T
@@ -272,6 +271,10 @@ class SimAnneal():
         self.MP = use_multiprocessing
         self.nprocs = nprocs
 
+
+        self.MoveBreakpoints = 0
+
+
         if self.MP:
             self.processes = mp.Pool(nprocs)
         else:
@@ -344,6 +347,8 @@ def move_random_breakpoint(SA, breakpoints, mode='match'):
 
     # 4) update trial solution
     breakpoints[index] = trial_point
+
+    # print "ID B: ", id(breakpoints)
     return breakpoints
 
 
@@ -358,9 +363,12 @@ def move_breakpoints(SA, breakpoints_match, breakpoints_mismatch):
     :return:
     '''
     # matches:
+    # print "check inside move_breakpoints #1: ", id(breakpoints_match)
+
     for i in range(len(breakpoints_match)):
         breakpoints_match = move_random_breakpoint(SA, breakpoints_match, mode='match')
 
+    # print "move_breakpoints check #2: ", id(breakpoints_match)
     # mismatches:
     for i in range(len(breakpoints_mismatch)):
         breakpoints_mismatch = move_random_breakpoint(SA, breakpoints_mismatch, mode='mismatch')
@@ -386,14 +394,18 @@ def TakeStep(SA, X, lwrbnd, upbnd):
 
 
     # Unpack slopes and breakpoints:
-    breakpoints = X[:(SA.nmbr_breakpoints_C + SA.nmbr_breakpoints_I)]
+
+
+
+    breakpoints = X[:(SA.nmbr_breakpoints_C + SA.nmbr_breakpoints_I)].copy()
     breakpoints_match = breakpoints[:SA.nmbr_breakpoints_C]
     breakpoints_mismatch = breakpoints[SA.nmbr_breakpoints_C:]
-    slopes = X[(SA.nmbr_breakpoints_C + SA.nmbr_breakpoints_I):]
+    slopes = X[(SA.nmbr_breakpoints_C + SA.nmbr_breakpoints_I):].copy()
 
     # Decide to move either slopes or breakpoints:
     if np.random.uniform(0, 1) < 0.5:
         MoveBreakPoints = True
+        SA.MoveBreakpoints +=1
     else:
         MoveBreakPoints = False
     if len(breakpoints) == 0:
@@ -404,13 +416,14 @@ def TakeStep(SA, X, lwrbnd, upbnd):
         breakpoints_match_trial, breakpoints_mismatch_trial = move_breakpoints(SA, breakpoints_match,
                                                                                breakpoints_mismatch)
         Xtrial = np.concatenate((breakpoints_match_trial, breakpoints_mismatch_trial, slopes))
-    # If we more the slopes:
+    # If we move the slopes:
     else:
         slopes_trial = move_slopes(SA, slopes)
         # Use 'tabula rasa'-rule to get legal configuration for slopes:
         while (slopes_trial < lwrbnd).any() or (slopes_trial > upbnd).any():
             slopes_trial = move_slopes(SA, slopes)
         Xtrial = np.concatenate((breakpoints_match, breakpoints_mismatch, slopes_trial))
+
     return Xtrial, MoveBreakPoints
 
 def Metropolis(SA, X, xdata, ydata, yerr, lwrbnd, upbnd):
@@ -437,12 +450,13 @@ def Metropolis(SA, X, xdata, ydata, yerr, lwrbnd, upbnd):
 
 
     Xtrial, MoveBreakPoints = TakeStep(SA,X,lwrbnd,upbnd)
-
     # Let V({dataset}|{parameterset}) be your residual function.
     # Metropolis:
     T = SA.T
     Vnew = V(SA, xdata, ydata, yerr, Xtrial)
     Vold = SA.potential
+
+
     if (np.random.uniform() < np.exp(-(Vnew - Vold) / T)):
         X = Xtrial
         # update the appropriate acceptance ratio:
@@ -461,25 +475,23 @@ def AcceptanceRatio(SA):
     :return:
     '''
     # Check acceptance for Breakpoints:
-    EQ_breakpoints = False
-    AR = (SA.accept_breakpoints / (float(SA.interval)*0.5)) * 100
-    if AR > SA.upperbnd:
-        SA.step_size_breakpoints *= SA.alpha
-    elif AR < SA.lwrbnd:
-        SA.step_size_breakpoints /= SA.alpha
-    else:
-        EQ_breakpoints = True  # <--- the next time around you'll go to TemperatureCycle()
-    SA.accept_breakpoints = 0  # reset counter
+    EQ_breakpoints = True
+    # AR = (SA.accept_breakpoints / (float(SA.interval)*0.5)) * 100
+    # if AR > SA.upperbnd:
+    #     SA.step_size_breakpoints *= SA.alpha
+    # elif AR < SA.lwrbnd:
+    #     SA.step_size_breakpoints /= SA.alpha
+    # else:
+    #     EQ_breakpoints = True  # <--- the next time around you'll go to TemperatureCycle()
+    # SA.accept_breakpoints = 0  # reset counter
 
     # Always have correct acceptance if I am not moving any breakpoints:
     if (SA.nmbr_breakpoints_C + SA.nmbr_breakpoints_I) == 0 :
         EQ_breakpoints = True
 
-
-
     # Check acceptance for slopes:
     EQ_slopes = False
-    AR = (SA.accept_slopes / (float(SA.interval)*0.5)) * 100
+    AR = (SA.accept_slopes / (float(SA.interval - SA.MoveBreakpoints))) * 100
     if AR > SA.upperbnd:
         SA.step_size_slopes *= SA.alpha
     elif AR < SA.lwrbnd:
@@ -487,7 +499,7 @@ def AcceptanceRatio(SA):
     else:
         EQ_slopes = True  # <--- the next time around you'll go to TemperatureCycle()
     SA.accept_slopes = 0  # reset counter
-
+    SA.MoveBreakpoints = 0
 
     if EQ_breakpoints and EQ_slopes:
         SA.EQ = True
@@ -555,7 +567,9 @@ def InitialLoop(SA, X, xdata, ydata, yerr, lwrbnd, upbnd):
     while True:
         steps += 1
         if (steps % SA.interval == 0):
-            AR =  ( (SA.accept_breakpoints + SA.accept_slopes) / float(SA.interval) ) * 100
+            # AR =  ( (SA.accept_breakpoints + SA.accept_slopes) / float(SA.interval) ) * 100
+            AR = (SA.accept_slopes / (float(SA.interval-SA.MoveBreakpoints))) * 100
+            SA.MoveBreakpoints = 0
             if AR > SA.upperbnd:
                 SA.T /= SA.alpha
                 SA.accept_slopes = 0
